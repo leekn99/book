@@ -1,0 +1,62 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from minisom import MiniSom  # 使用MiniSom库
+
+# 创建一个简单的二维数据集，带有缺失值
+np.random.seed(0)
+data = np.random.rand(50, 2)  # 50个样本，每个样本有2个特征
+missing_index = np.random.choice(range(50), size=10, replace=False)  # 随机选择10个缺失值的索引
+print(missing_index)
+for i in missing_index:
+    data[i][1] = np.nan  # 将这些索引对应的数据点设置为NaN
+
+# 打印原始数据集
+print("Original dataset with missing values:")
+print(data)
+
+# 可视化原始数据集
+plt.figure(figsize=(6, 6))
+plt.title("Original Dataset")
+plt.scatter(data[:, 0], data[:, 1], c='blue', label='Original Data')
+plt.scatter(data[missing_index, 0], data[missing_index, 1], c='red', marker='x', label='Missing Values')
+plt.legend()
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.grid(True)
+#plt.show()
+
+# 定义自组织映射的参数
+som_dim = 20  # SOM的网格维度
+epochs = 200  # SOM的迭代次数
+
+# 初始化SOM
+som = MiniSom(som_dim, som_dim, 2, sigma=0.5, learning_rate=0.05)
+
+# 将data1转换为NumPy数组
+data1_np = np.array(data)
+# 删除包含缺失值的行
+data1_clean = data1_np[~np.isnan(data1_np).any(axis=1)]
+
+# 训练SOM
+som.train_random(data1_clean, epochs)  # 只使用没有缺失值的数据进行训练
+
+for i in missing_index:
+    for j in range(data.shape[1]):  # 遍历每一列
+        if np.isnan(data[i, j]):  # 如果发现缺失值
+            bmu = som.winner(data[i])
+            data[i, j] = som._weights[bmu[0], bmu[1], j]  # 只替换缺失值
+
+
+# 打印插补后的数据集
+print("\nDataset after interpolation:")
+print(data)
+
+# 可视化插补后的数据集
+plt.figure(figsize=(6, 6))
+plt.title("Interpolated Dataset using SOM")
+plt.scatter(data[:, 0], data[:, 1], c='green', label='Interpolated Data')
+plt.legend()
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.grid(True)
+plt.show()
