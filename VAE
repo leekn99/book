@@ -1,0 +1,111 @@
+import numpy as np
+import pandas as pd
+import torch
+from sklearn.preprocessing import StandardScaler
+import torch.nn as nn
+import torch.optim as optim
+
+# 创建简单的表格数据
+data = np.array([
+    [1.0, 2.0],
+    [2.0, 3.0],
+    [3.0, 4.0],
+    [4.0, 5.0],
+    [1.0, 2.0],
+    [2.0, 3.0],
+    [3.0, 4.0],
+    [1.0, 2.0],
+    [2.0, 3.0],
+    [3.0, 4.0],
+    [4.0, 5.0],
+    [1.0, 2.0],
+    [2.0, 3.0],
+    [3.0, 4.0]
+    
+])
+
+# 标准化数据
+scaler = StandardScaler()
+data = scaler.fit_transform(data)
+
+# 转换为 PyTorch 张量
+data_tensor = torch.tensor(data, dtype=torch.float32)
+class Encoder(nn.Module):
+    def __init__(self, input_dim, hidden_dim, latent_dim):
+        super(Encoder, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2_mu = nn.Linear(hidden_dim, latent_dim)
+        self.fc2_logvar = nn.Linear(hidden_dim, latent_dim)
+    
+    def forward(self, x):
+        h1 = torch.relu(self.fc1(x))
+        mu = self.fc2_mu(h1)
+        logvar = self.fc2_logvar(h1)
+        return mu, logvar
+
+class Decoder(nn.Module):
+    def __init__(self, latent_dim, hidden_dim, output_dim):
+        super(Decoder, self).__init__()
+        self.fc1 = nn.Linear(latent_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+    
+    def forward(self, z):
+        h1 = torch.relu(self.fc1(z))
+        x_recon = torch.sigmoid(self.fc2(h1))
+        return x_recon
+
+class VAE(nn.Module):
+    def __init__(self, input_dim, hidden_dim, latent_dim):
+        super(VAE, self).__init__()
+        self.encoder = Encoder(input_dim, hidden_dim, latent_dim)
+        self.decoder = Decoder(latent_dim, hidden_dim, input_dim)
+    
+    def forward(self, x):
+        mu, logvar = self.encoder(x)
+        std = torch.exp(0.5 * logvar)
+        epsilon = torch.randn_like(std)
+        z = mu + epsilon * std
+        x_recon = self.decoder(z)
+        return x_recon, mu, logvar
+
+    def loss_function(self, x_recon, x, mu, logvar):
+        recon_loss = nn.functional.binary_cross_entropy(x_recon, x, reduction='sum')
+        kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return recon_loss + kl_div
+# 参数设置
+input_dim = data_tensor.shape[1]
+hidden_dim = 4
+latent_dim = 2
+learning_rate = 1e-3
+num_epochs = 100
+
+# 初始化模型、优化器和损失函数
+model = VAE(input_dim, hidden_dim, latent_dim)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+# 训练模型
+for epoch in range(num_epochs):
+    model.train()
+    optimizer.zero_grad()
+    
+    # 前向传播
+    x_recon, mu, logvar = model(data_tensor)
+    
+    # 计算损失
+    loss = model.loss_function(x_recon, data_tensor, mu, logvar)
+    loss.backward()
+    optimizer.step()
+    
+    if (epoch + 1) % 10 == 0:
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}')
+model.eval()
+with torch.no_grad():
+
+    # 生成潜在空间中的样本
+    z = torch.randn(5, latent_dim)  # 生成5个新样本
+    generated_samples = model.decoder(z)
+    generated_samples = generated_samples.numpy()
+    
+    # 反标准化
+    generated_samples = scaler.inverse_transform(generated_samples)
+    print(generated_samples)
