@@ -1,0 +1,97 @@
+import torch
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+
+class SimpleDataset(Dataset):
+    def __init__(self, data):
+        self.data = torch.tensor(data, dtype=torch.float32)
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+# 示例数据：30个样本，每个样本有2个特征
+data = np.random.rand(10, 2)  # 你可以用你的实际数据替换这一行
+print(data)
+dataset = SimpleDataset(data)
+dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
+import torch.nn as nn
+import torch.optim as optim
+
+class Generator(nn.Module):
+    def __init__(self):
+        super(Generator, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(2, 16),
+            nn.ReLU(),
+            nn.Linear(16, 2),
+            nn.Tanh()
+        )
+    
+    def forward(self, x):
+        return self.model(x)
+
+class Discriminator(nn.Module):
+    def __init__(self):
+        super(Discriminator, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(2, 16),
+            nn.ReLU(),
+            nn.Linear(16, 1),
+            nn.Sigmoid()
+        )
+    
+    def forward(self, x):
+        return self.model(x)
+
+# 实例化模型
+generator = Generator()
+discriminator = Discriminator()
+
+# 定义损失函数和优化器
+criterion = nn.BCELoss()
+optimizer_g = optim.Adam(generator.parameters(), lr=0.001)
+optimizer_d = optim.Adam(discriminator.parameters(), lr=0.001)
+num_epochs = 1000
+for epoch in range(num_epochs):
+    for real_data in dataloader:
+        batch_size = real_data.size(0)
+        
+        # 标签
+        real_labels = torch.ones(batch_size, 1)
+        fake_labels = torch.zeros(batch_size, 1)
+        
+        # 训练判别器
+        optimizer_d.zero_grad()
+        
+        # 真实数据
+        outputs = discriminator(real_data)
+        d_loss_real = criterion(outputs, real_labels)
+        d_loss_real.backward()
+        
+        # 假数据
+        z = torch.randn(batch_size, 2)
+        fake_data = generator(z)
+        outputs = discriminator(fake_data.detach())
+        d_loss_fake = criterion(outputs, fake_labels)
+        d_loss_fake.backward()
+        
+        optimizer_d.step()
+        
+        # 训练生成器
+        optimizer_g.zero_grad()
+        
+        outputs = discriminator(fake_data)
+        g_loss = criterion(outputs, real_labels)
+        g_loss.backward()
+        
+        optimizer_g.step()
+    
+    if epoch % 100 == 0:
+        print(f'Epoch [{epoch}/{num_epochs}], Loss D: {d_loss_real.item() + d_loss_fake.item()}, Loss G: {g_loss.item()}')
+with torch.no_grad():
+    z = torch.randn(10, 2)  # 生成10个新样本
+    generated_data = generator(z)
+    print(generated_data)
